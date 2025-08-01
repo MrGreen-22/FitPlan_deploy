@@ -1,7 +1,8 @@
 #!/bin/bash
 
 # Use multiple -f flags to include all service-specific and infrastructure Compose files
-docker compose -f docker-compose.yml \
+docker compose -p fitplan_deploy \
+               -f docker-compose.yml \
                -f ../infra/api-gateway/docker-compose.yml \
                -f ../services/iam-service/docker-compose.yml \
                -f ../services/media-service/docker-compose.yml \

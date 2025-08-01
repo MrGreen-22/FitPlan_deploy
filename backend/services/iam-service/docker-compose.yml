@@ -120,6 +120,12 @@ services:
     networks:
       - app-network
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "sh -c 'pg_isready -U ${POSTGRES_USER:-postgres}'"]
+      interval: 30s
+      timeout: 10s
+      start_period: 5s
+      retries: 5
     expose:
       - 5432
 
@@ -149,7 +155,36 @@ services:
       - ./redis.conf:/usr/local/etc/redis/redis.conf
     networks:
       - app-network
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping | grep PONG"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 10s # Time to wait before starting health checks  
     restart: unless-stopped
+
+  rabbitmq:
+    image: rabbitmq:4-management
+    container_name: rabbitmq
+    ports:
+      - "5672:5672" # rabbitmq server
+      - "15672:15672" # management UI
+    networks:
+      - app-network
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"] # Command to check RabbitMQ health
+      interval: 30s # How often to run the check
+      timeout: 10s # Maximum time allowed for the command to complete
+      retries: 5 # Number of consecutive failures before marking as unhealthy
+      start_period: 10s # Time to wait before starting health checks 
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.rabbitmq.rule=Host(`rabbitmq.localhost`)"
+      - "traefik.http.services.rabbitmq.loadbalancer.server.port=15672"   
+    restart: unless-stopped    
 
   iam:
     build:
@@ -167,8 +202,12 @@ services:
       - "traefik.http.services.iam.loadbalancer.server.port=80"
     restart: unless-stopped
     depends_on:
-      - postgres
-      - redis
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_started
     environment:
       - ENVIRONMENT=docker
 
